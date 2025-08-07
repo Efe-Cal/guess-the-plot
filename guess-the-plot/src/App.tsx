@@ -1,33 +1,35 @@
 import React, { useState, useRef, useEffect } from 'react';
 import './App.css';
 
-interface ChatMessage {
-  sender: 'user' | 'ai';
-  text: string;
+interface PlotGuessEvaluation {
+  is_correct: boolean;
+  accuracy: number;
+  time: string;
+  explanation: string;
+  confidence: number;
 }
 
 const OMDB_API_KEY = '1eee483'; 
 
 function App() {
   const [input, setInput] = useState('');
-  const [chat, setChat] = useState<ChatMessage[]>([]);
   const [loading, setLoading] = useState(false);
   const [seriesInput, setSeriesInput] = useState('');
   const [selectedSeries, setSelectedSeries] = useState('');
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [seriesSuggestions, setSeriesSuggestions] = useState<string[]>([]);
   const debounceRef = useRef<NodeJS.Timeout | null>(null);
-  const chatHistoryRef = useRef<HTMLDivElement | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const [currentGuess, setCurrentGuess] = useState<string>('');
+  const [response, setResponse] = useState<PlotGuessEvaluation | null>(null);
+  const [revealedCards, setRevealedCards] = useState<Set<string>>(new Set());
 
   useEffect(() => {
-    if (chatHistoryRef.current) {
-      // Scroll the chat history to the bottom
-      chatHistoryRef.current.scrollTop = chatHistoryRef.current.scrollHeight;
+    // Scroll to top when a new guess is made
+    if (currentGuess) {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
     }
-    // Also scroll the page to the bottom to keep the input visible if needed
-    window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
-  }, [chat]);
+  }, [currentGuess]);
 
   const fetchSeriesSuggestions = (query: string) => {
     if (!query.trim()) {
@@ -50,36 +52,33 @@ function App() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!input.trim()) return;
-    const userMessage: ChatMessage = { sender: 'user', text: input };
-    setChat(prev => [...prev, userMessage]);
+    
+    setCurrentGuess(input.trim());
     setLoading(true);
     setInput('');
+    setResponse(null);
+    setRevealedCards(new Set());
+    
     // Reset textarea height
     if (textareaRef.current) {
       textareaRef.current.style.height = '2.5em';
     }
-    // focus on the input
-    const inputElement = document.querySelector('.chat-input');
-    if (inputElement) {
-      (inputElement as HTMLInputElement).focus();
-    }
+    
     // Call backend API
-    fetch('http://localhost:5000/api/ai', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message: userMessage.text, series: selectedSeries })
-    })
-      .then(res => res.json())
-      .then(data => {
-        const aiMessage: ChatMessage = { sender: 'ai', text: data.response };
-        setChat(prev => [...prev, aiMessage]);
-        setLoading(false);
-      })
-      .catch(() => {
-        const aiMessage: ChatMessage = { sender: 'ai', text: 'AI: (Error getting response from server)' };
-        setChat(prev => [...prev, aiMessage]);
-        setLoading(false);
+    try {
+      const res = await fetch('http://localhost:8000/api/guess-ai/', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ guess: currentGuess || input.trim(), tv_show_name: selectedSeries })
       });
+      const data = await res.json();
+      console.log('AI response:', data);
+      setResponse(data.response);
+      setLoading(false);
+    } catch (error) {
+      console.error('Error:', error);
+      setLoading(false);
+    }
   };
 
   const handleSeriesChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -97,6 +96,42 @@ function App() {
     setSeriesInput(series);
     setSelectedSeries(series);
     setShowSuggestions(false);
+  };
+
+  const handleCardClick = (cardKey: string) => {
+    setRevealedCards(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(cardKey)) {
+        newSet.delete(cardKey);
+      } else {
+        newSet.add(cardKey);
+      }
+      return newSet;
+    });
+  };
+
+  const getCardInfo = (key: keyof PlotGuessEvaluation) => {
+    const cardInfoMap = {
+      is_correct: { title: 'Correctness', icon: '✓' },
+      accuracy: { title: 'Accuracy Score', icon: '🎯' },
+      time: { title: 'Time Period', icon: '📅' },
+      explanation: { title: 'Explanation', icon: '💡' },
+      confidence: { title: 'AI Confidence', icon: '🤖' }
+    };
+    return cardInfoMap[key];
+  };
+
+  const formatCardValue = (key: keyof PlotGuessEvaluation, value: any) => {
+    switch (key) {
+      case 'is_correct':
+        return value ? 'Correct! 🎉' : 'Incorrect ❌';
+      case 'accuracy':
+        return `${Math.round(value * 100)}%`;
+      case 'confidence':
+        return `${Math.round(value * 100)}%`;
+      default:
+        return value?.toString() || '';
+    }
   };
 
   return (
@@ -133,19 +168,63 @@ function App() {
         </div>}
       </header>
       <main>
-        {/* Chat container for history only */}
-        <div className="chat-container">
-          <div className="chat-history" ref={chatHistoryRef}>
-            {chat.map((msg, idx) => (
-              <div key={idx} className={`chat-message ${msg.sender}`}>
-                {msg.sender === 'ai' && (
-                  <span className="sender-label">AI</span>
-                )}
-                <span>{msg.text}</span>
-              </div>
-            ))}
+        {/* Display current guess */}
+        {currentGuess && (
+          <div className="current-guess">
+            <h2>Your Guess:</h2>
+            <p>"{currentGuess}"</p>
           </div>
-        </div>
+        )}
+
+        {/* Loading indicator */}
+        {loading && (
+          <div className="loading-container">
+            <p>Analyzing your guess...</p>
+          </div>
+        )}
+
+        {/* Response cards */}
+        {response && !loading && (
+          <div className="response-cards">
+            <div className="results-header">
+              <h3>Results</h3>
+              {response.confidence && (
+                <span className="confidence-indicator">
+                  AI Confidence: {Math.round(response.confidence * 100)}%
+                </span>
+              )}
+            </div>
+            <div className="cards-grid">
+              {(Object.keys(response) as Array<keyof PlotGuessEvaluation>)
+                .filter(key => key !== 'confidence') // Exclude confidence from cards
+                .map((key) => {
+                const cardInfo = getCardInfo(key);
+                const isRevealed = revealedCards.has(key);
+                return (
+                  <div
+                    key={key}
+                    className={`result-card ${isRevealed ? 'revealed' : 'hidden'}`}
+                    onClick={() => handleCardClick(key)}
+                  >
+                    <div className="card-header">
+                      <span className="card-icon">{cardInfo.icon}</span>
+                      <span className="card-title">{cardInfo.title}</span>
+                    </div>
+                    <div className="card-content">
+                      {isRevealed ? (
+                        <span className="card-value">
+                          {formatCardValue(key, response[key])}
+                        </span>
+                      ) : (
+                        <span className="card-placeholder">Click to reveal</span>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
       </main>
       {/* Fixed chat form at the bottom of the page */}
       <form onSubmit={handleSubmit} className="chat-form fixed-chat-form">
