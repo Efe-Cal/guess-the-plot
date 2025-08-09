@@ -53,7 +53,8 @@ function App() {
     e.preventDefault();
     if (!input.trim()) return;
     
-    setCurrentGuess(input.trim());
+    const newGuess = input.trim();
+    setCurrentGuess(newGuess);
     setLoading(true);
     setInput('');
     setResponse(null);
@@ -66,14 +67,14 @@ function App() {
     
     // Call backend API
     try {
-      const res = await fetch('http://localhost:8000/api/guess-ai/', {
+      const res = await fetch('http://localhost:8000/evaluate-guess', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ guess: currentGuess || input.trim(), tv_show_name: selectedSeries })
+        body: JSON.stringify({ guess: newGuess, tv_show_name: selectedSeries })
       });
       const data = await res.json();
       console.log('AI response:', data);
-      setResponse(data.response);
+      setResponse(data as PlotGuessEvaluation);
       setLoading(false);
     } catch (error) {
       console.error('Error:', error);
@@ -197,31 +198,37 @@ function App() {
             <div className="cards-grid">
               {(Object.keys(response) as Array<keyof PlotGuessEvaluation>)
                 .filter(key => key !== 'confidence') // Exclude confidence from cards
+                .filter(key => {
+                  if (key === 'time') {
+                    return response.time !== null && response.time !== '';
+                  }
+                  return true;
+                })
                 .map((key) => {
-                const cardInfo = getCardInfo(key);
-                const isRevealed = revealedCards.has(key);
-                return (
-                  <div
-                    key={key}
-                    className={`result-card ${isRevealed ? 'revealed' : 'hidden'}`}
-                    onClick={() => handleCardClick(key)}
-                  >
-                    <div className="card-header">
-                      <span className="card-icon">{cardInfo.icon}</span>
-                      <span className="card-title">{cardInfo.title}</span>
+                  const cardInfo = getCardInfo(key);
+                  const isRevealed = revealedCards.has(key);
+                  return (
+                    <div
+                      key={key}
+                      className={`result-card ${isRevealed ? 'revealed' : 'hidden'}`}
+                      onClick={() => handleCardClick(key)}
+                    >
+                      <div className="card-header">
+                        <span className="card-icon">{cardInfo.icon}</span>
+                        <span className="card-title">{cardInfo.title}</span>
+                      </div>
+                      <div className="card-content">
+                        {isRevealed ? (
+                          <span className="card-value">
+                            {formatCardValue(key, response[key])}
+                          </span>
+                        ) : (
+                          <span className="card-placeholder">Click to reveal</span>
+                        )}
+                      </div>
                     </div>
-                    <div className="card-content">
-                      {isRevealed ? (
-                        <span className="card-value">
-                          {formatCardValue(key, response[key])}
-                        </span>
-                      ) : (
-                        <span className="card-placeholder">Click to reveal</span>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
+                  );
+                })}
             </div>
           </div>
         )}
