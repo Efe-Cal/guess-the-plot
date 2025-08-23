@@ -170,7 +170,6 @@ h1 {
   font-weight: 600;
   letter-spacing: 1px;
   z-index: 100;
-  text-align: left;
   box-shadow: 0 2px 8px rgba(0,0,0,0.08);
   display: flex;
   align-items: center;
@@ -183,6 +182,25 @@ h1 {
   overflow: hidden;
   text-overflow: ellipsis;
   max-width: 80vw;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  line-height: 1;
+}
+
+.reload-icon {
+  width: 20px;
+  height: 20px;
+  fill: currentColor;
+  cursor: pointer;
+  transition: transform 0.2s ease;
+  flex-shrink: 0;
+  stroke: currentColor;
+  stroke-width: 0.5;
+}
+
+.reload-icon:hover {
+  transform: rotate(180deg);
 }
 
 /* --- Chat history modern chat look --- */
@@ -428,6 +446,33 @@ main, .chat-container {
   margin: 2rem;
   color: #61dafb;
   font-size: 1.2rem;
+}
+
+.animated-dots {
+  display: inline-block;
+  position: relative;
+  left: -9999px;
+  width: 10px;
+  height: 10px;
+  border-radius: 5px;
+  background-color: #61dafb;
+  color: #61dafb;
+  box-shadow: 9984px 0 0 0 #61dafb, 9999px 0 0 0 #61dafb, 10014px 0 0 0 #61dafb;
+  animation: dot-carousel 1.5s infinite linear;
+  margin-left: 1.2em;
+  vertical-align: middle;
+}
+
+@keyframes dot-carousel {
+  0% {
+    box-shadow: 9984px 0 0 -1px #61dafb, 9999px 0 0 1px #61dafb, 10014px 0 0 -1px #61dafb;
+  }
+  50% {
+    box-shadow: 10014px 0 0 -1px #61dafb, 9984px 0 0 -1px #61dafb, 9999px 0 0 1px #61dafb;
+  }
+  100% {
+    box-shadow: 9999px 0 0 1px #61dafb, 10014px 0 0 -1px #61dafb, 9984px 0 0 -1px #61dafb;
+  }
 }
 
 /* Response Cards */

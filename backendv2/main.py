@@ -35,6 +35,7 @@ SYSTEM_MESSAGE = (
     "once in the show, it is considered correct, even if it is not the final resolution of the plot.\n"
     "You are given access to a web search tool to find information about the TV show. "
     "You MUST use the web search tool at least once before finalizing your evaluation."
+    "\n\nYou MUST use the PlotGuessEvaluation tool to return your final response. "
 )
 
 USER_MESSAGE = """
