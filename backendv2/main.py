@@ -8,6 +8,7 @@ from langgraph.graph import StateGraph, END
 from langchain_core.messages import SystemMessage, HumanMessage
 from langgraph.graph import MessagesState
 from langgraph.prebuilt import ToolNode
+from langgraph.errors import GraphRecursionError 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -34,20 +35,19 @@ SYSTEM_MESSAGE = (
     "as long as it captures the main events and themes of the plot. If the event in the guess occurs even "
     "once in the show, it is considered correct, even if it is not the final resolution of the plot.\n"
     "You are given access to a web search tool to find information about the TV show. "
-    "You MUST use the web search tool at least once before finalizing your evaluation."
-    "\n\nYou MUST use the PlotGuessEvaluation tool to return your final response. "
+    "You MUST use the web search tool at least once, and maximum 3 time, before finalizing your evaluation."
 )
 
 USER_MESSAGE = """
+Please evaluate the following guess about a TV show plot.
 TV Show Name: {tv_show_name}
 Guess: {guess}
 """
 
-
 class PlotGuessEvaluation(BaseModel):
     is_correct: bool = Field(..., description="Whether the guess is correct or not")
     accuracy: float = Field(..., description="Accuracy of the guess (0-1 scale, optimistic if partially correct)")
-    time: Optional[str] = Field(None, description="When in the show the event occurs, leave empty if incorrect")
+    time: Optional[str] = Field(None, description="When in the show the event occurs. Try to be as specific and precise as possible, e.g., 'Season 2' or 'Final season'. MUST be left empty if the guess is incorrect")
     explanation: str = Field(..., description="Explanation of the guess's correctness or incorrectness")
     confidence: float = Field(..., description="Your confidence level (0-1 scale)")
 
@@ -136,13 +136,6 @@ workflow.add_edge("tools", "agent")
 workflow.add_edge("respond", END)
 graph = workflow.compile()
 
-# response = graph.invoke(input={"messages": [
-#     SystemMessage(content=SYSTEM_MESSAGE),
-#     HumanMessage(content=USER_MESSAGE.format(**{"tv_show_name": "House", "guess": "House and Cuddy will end up together at the end of the show"})) 
-#     ]}
-# )["final_response"]
-# print(response)
-
 class GuessRequest(BaseModel):
     tv_show_name: str
     guess: str
@@ -165,7 +158,22 @@ async def evaluate_guess(request: GuessRequest) -> PlotGuessEvaluation:
             HumanMessage(content=USER_MESSAGE.format(tv_show_name=request.tv_show_name, guess=request.guess))
         ]
     }
-    
-    response = graph.invoke(input=input_data)
-    
-    return response["final_response"].dict()
+    c = 0
+    while c < 3:
+        try:
+            response = graph.invoke(input=input_data, config={"recursion_limit": 10})
+            break
+        except GraphRecursionError:
+            print("Recursion limit reached, retrying...")
+            c += 1
+            continue
+    else:
+        return PlotGuessEvaluation(
+            is_correct=False,
+            accuracy=0.0,
+            time=None,
+            explanation="Could not evaluate the guess due to recursion limit.",
+            confidence=0.0
+        )
+        
+    return response["final_response"].model_dump()

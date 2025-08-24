@@ -9,8 +9,6 @@ interface PlotGuessEvaluation {
   confidence: number;
 }
 
-const OMDB_API_KEY = '1eee483'; // Consider moving to env variable in production
-
 const GuessPage: React.FC = () => {
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
@@ -43,7 +41,7 @@ const GuessPage: React.FC = () => {
       setSeriesSuggestions([]);
       return;
     }
-    fetch(`https://www.omdbapi.com/?apikey=${OMDB_API_KEY}&s=${encodeURIComponent(query)}&type=series`)
+    fetch(`https://www.omdbapi.com/?apikey=${process.env.OMDB_API_KEY}&s=${encodeURIComponent(query)}&type=series`)
       .then(res => res.json())
       .then(data => {
         if (data && data.Search) {
@@ -79,7 +77,7 @@ const GuessPage: React.FC = () => {
     }
 
     try {
-      const res = await fetch('http://localhost:8000/evaluate-guess', {
+      const res = await fetch(process.env.API_URL || 'http://localhost:8000/evaluate-guess', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ guess: newGuess, tv_show_name: selectedSeries })
@@ -145,7 +143,7 @@ const GuessPage: React.FC = () => {
   return (
     <div className="App">
       {selectedSeries && (
-        <div onClick={() => {setSelectedSeries('');setSeriesInput('')}} className="top-series-bar">
+        <div onClick={() => {setSelectedSeries('');setSeriesInput('');setCurrentGuess('');setResponse(null)}} className="top-series-bar">
           <span className="series-title">
             Guess the Plot: {selectedSeries}
             <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" className="reload-icon bi bi-arrow-clockwise" viewBox="0 0 16 16" strokeWidth="0.5" stroke="currentColor">

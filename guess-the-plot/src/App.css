@@ -57,7 +57,7 @@
   display: flex;
   flex-direction: column;
   min-height: 100vh;
-  overflow-y: hidden;
+  overflow-y: auto;
 }
 
 .App-header {
@@ -82,12 +82,11 @@ main {
   align-items: center;
   justify-content: flex-start;
   box-sizing: border-box;
-  padding-top: 24px;
-  padding-bottom: 24px;
+  padding: 24px 1rem 100px; /* Add bottom padding for fixed chat form */
   background-color: #282c34;
   flex: 1 1 auto;
   min-height: 0;
-  overflow-y: hidden;
+  overflow-y: auto;
 }
 
 h1 {
@@ -165,7 +164,7 @@ h1 {
   width: 100vw;
   background: #181b20;
   color: #61dafb;
-  padding: 0.7rem 2.5rem 0.7rem 1.5rem;
+  padding: 0.7rem 2.5rem 0.7rem 2rem; /* Increase left padding */
   font-size: 1.25rem;
   font-weight: 600;
   letter-spacing: 1px;
@@ -175,6 +174,7 @@ h1 {
   align-items: center;
   min-height: 48px;
   height: 48px;
+  box-sizing: border-box;
 }
 
 .series-title {
@@ -411,7 +411,7 @@ h1 {
   margin-bottom: 0; /* Remove margin to stick to bottom */
 }
 
-main, .chat-container {
+.chat-container {
   padding-bottom: 80px; /* Reduced space for smaller fixed chat form */
 }
 
@@ -420,7 +420,7 @@ main, .chat-container {
   background: rgba(255, 255, 255, 0.05);
   border-radius: 12px;
   padding: 1.5rem;
-  margin: 1rem;
+  margin: 1rem 1.5rem; /* Increase side margins */
   margin-top: 60px; /* Add space from top bar */
   max-width: 800px;
   width: 100%;
@@ -443,7 +443,7 @@ main, .chat-container {
 
 /* Loading Container */
 .loading-container {
-  margin: 2rem;
+  margin: 2rem 1.5rem; /* Increase side margins */
   color: #61dafb;
   font-size: 1.2rem;
 }
@@ -479,7 +479,8 @@ main, .chat-container {
 .response-cards {
   max-width: 1000px;
   width: 100%;
-  margin: 2rem 1rem;
+  margin: 2rem 1.5rem; /* Increase side margins */
+  box-sizing: border-box;
 }
 
 .response-cards h3 {
@@ -509,7 +510,7 @@ main, .chat-container {
   display: grid;
   grid-template-columns: 1fr; /* Single column for vertical layout */
   gap: 1rem;
-  padding: 0 1rem;
+  padding: 0 1.5rem; /* Increase horizontal padding */
 }
 
 .result-card {
@@ -524,6 +525,7 @@ main, .chat-container {
   flex-direction: column;
   justify-content: space-between;
   width: 100%; /* Full width for vertical layout */
+  box-sizing: border-box; /* Include padding and border in width calculation */
 }
 
 .result-card:hover {
@@ -577,24 +579,63 @@ main, .chat-container {
 
 /* Responsive design */
 @media (max-width: 768px) {
+  main {
+    padding: 24px 0.75rem 120px; /* Reduce but keep some margin on mobile, more bottom space */
+  }
+  
   .cards-grid {
     grid-template-columns: 1fr; /* Already single column */
-    padding: 0;
+    padding: 0; /* Remove padding to prevent width overflow */
+    gap: 0.75rem; /* Slightly smaller gap on mobile */
   }
   
   .current-guess {
-    margin: 0.75rem 0.5rem;
-    margin-top: 60px; /* Adjusted for mobile */
+    margin: 0.75rem 0.75rem; /* Keep some margin from edges */
+    margin-top: 20px; /* Reduce top margin for mobile */
+    padding: 1rem; /* Reduce padding on mobile */
   }
   
   .response-cards {
-    margin: 2rem 0.5rem;
+    margin: 1rem 0; /* Remove side margins completely */
+    max-width: 100%; /* Ensure it doesn't exceed viewport */
+    padding: 0 0.75rem; /* Add padding here instead for proper width calculation */
+  }
+  
+  .result-card {
+    padding: 1rem; /* Reduce padding on mobile */
+    min-height: 60px; /* Smaller minimum height */
+    border-radius: 12px; /* Slightly smaller border radius */
+    width: 100%; /* Ensure full width within container */
+    box-sizing: border-box; /* Include padding and border in width calculation */
+  }
+  
+  .card-header {
+    margin-bottom: 0.75rem; /* Reduce spacing */
+    gap: 0.5rem; /* Smaller gap between icon and title */
+  }
+  
+  .card-icon {
+    font-size: 1.25rem; /* Smaller icon on mobile */
+  }
+  
+  .card-title {
+    font-size: 1rem; /* Smaller title font */
+  }
+  
+  .card-value {
+    font-size: 1.1rem; /* Smaller value font */
   }
   
   .results-header {
     flex-direction: column;
     align-items: flex-start;
     gap: 0.5rem;
+    margin-bottom: 1rem; /* Reduce bottom margin */
+  }
+  
+  .response-cards h3 {
+    font-size: 1.5rem; /* Smaller heading on mobile */
+    margin-bottom: 1rem; /* Reduce margin */
   }
   
   .confidence-indicator {
@@ -605,5 +646,61 @@ main, .chat-container {
     width: 70vw;
     min-width: 250px;
     font-size: 1rem;
+  }
+  
+  .top-series-bar {
+    padding: 0.7rem 1.5rem 0.7rem 1rem; /* Reduce padding on mobile */
+  }
+}
+
+/* Extra small screens */
+@media (max-width: 480px) {
+  main {
+    padding: 24px 0.5rem 120px; /* Minimal but present margin on very small screens, more bottom space */
+  }
+  
+  .response-cards {
+    margin: 0.75rem 0; /* Remove side margins completely */
+    padding: 0 0.5rem; /* Minimal padding for very small screens */
+  }
+  
+  .cards-grid {
+    padding: 0; /* No padding - it's handled by response-cards */
+    gap: 0.5rem; /* Smaller gap */
+  }
+  
+  .result-card {
+    padding: 0.75rem; /* Even smaller padding */
+    min-height: 50px; /* Smaller minimum height */
+    width: 100%; /* Ensure full width within container */
+    box-sizing: border-box; /* Include padding and border in width calculation */
+  }
+  
+  .current-guess {
+    margin: 0.5rem 0.5rem; /* Keep minimal margin from edges */
+    margin-top: 10px; /* Minimal top margin for very small screens */
+    padding: 0.75rem; /* Smaller padding */
+  }
+  
+  .current-guess h2 {
+    font-size: 1.25rem; /* Smaller heading */
+  }
+  
+  .current-guess p {
+    font-size: 1rem; /* Smaller text */
+  }
+}
+
+.bi-hourglass-split{
+  animation: rotate 1s linear infinite; 
+
+}
+
+@keyframes rotate {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
   }
 }
