@@ -41,7 +41,7 @@ const GuessPage: React.FC = () => {
       setSeriesSuggestions([]);
       return;
     }
-    fetch(`https://www.omdbapi.com/?apikey=${process.env.OMDB_API_KEY}&s=${encodeURIComponent(query)}&type=series`)
+    fetch(`https://www.omdbapi.com/?apikey=${process.env.REACT_APP_OMDB_API_KEY}&s=${encodeURIComponent(query)}&type=series`)
       .then(res => res.json())
       .then(data => {
         if (data && data.Search) {
@@ -77,7 +77,7 @@ const GuessPage: React.FC = () => {
     }
 
     try {
-      const res = await fetch(process.env.API_URL || 'http://localhost:8000/evaluate-guess', {
+      const res = await fetch(process.env.REACT_APP_API_URL || 'http://localhost:8000/evaluate-guess', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ guess: newGuess, tv_show_name: selectedSeries })
