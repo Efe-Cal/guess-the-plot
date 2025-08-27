@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import './App.css';
+import PrivacyPolicyContent from './PrivacyPolicyContent';
 
 interface PlotGuessEvaluation {
   is_correct: boolean;
@@ -8,6 +9,14 @@ interface PlotGuessEvaluation {
   explanation: string;
   confidence: number;
 }
+
+interface FeedbackData {
+  name: string;
+  email: string;
+  feedback: string;
+}
+
+const API_BASE_URL = (process.env.REACT_APP_API_URL?.replace(/\/$/, '') || "http://localhost:8000") + "/api";
 
 const GuessPage: React.FC = () => {
   const [input, setInput] = useState('');
@@ -22,6 +31,15 @@ const GuessPage: React.FC = () => {
   const [currentGuess, setCurrentGuess] = useState<string>('');
   const [response, setResponse] = useState<PlotGuessEvaluation | null>(null);
   const [revealedCards, setRevealedCards] = useState<Set<string>>(new Set());
+  const [showOptionsMenu, setShowOptionsMenu] = useState(false);
+  const [showFeedbackModal, setShowFeedbackModal] = useState(false);
+  const [showPrivacyModal, setShowPrivacyModal] = useState(false);
+  const [feedbackData, setFeedbackData] = useState<FeedbackData>({
+    name: '',
+    email: '',
+    feedback: ''
+  });
+  const [feedbackSubmitting, setFeedbackSubmitting] = useState(false);
 
   useEffect(() => {
     if (currentGuess) {
@@ -35,6 +53,21 @@ const GuessPage: React.FC = () => {
       seriesInputRef.current.focus();
     }
   }, [selectedSeries]);
+
+  useEffect(() => {
+    // Close options menu when clicking outside
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as Element;
+      if (!target.closest('.options-menu-container')) {
+        setShowOptionsMenu(false);
+      }
+    };
+
+    if (showOptionsMenu) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => document.removeEventListener('mousedown', handleClickOutside);
+    }
+  }, [showOptionsMenu]);
 
   const fetchSeriesSuggestions = (query: string) => {
     if (!query.trim()) {
@@ -77,7 +110,7 @@ const GuessPage: React.FC = () => {
     }
 
     try {
-      const res = await fetch(process.env.REACT_APP_API_URL || 'http://localhost:8000/evaluate-guess', {
+      const res = await fetch(API_BASE_URL+ '/evaluate-guess', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ guess: newGuess, tv_show_name: selectedSeries })
@@ -140,8 +173,84 @@ const GuessPage: React.FC = () => {
     }
   };
 
+  const handleOptionClick = (option: string) => {
+    setShowOptionsMenu(false);
+    if (option === 'feedback') {
+      setShowFeedbackModal(true);
+    } else if (option === 'privacy') {
+      setShowPrivacyModal(true);
+    }
+  };
+
+  const handleFeedbackSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!feedbackData.feedback.trim()) {
+      alert('Please provide your feedback.');
+      return;
+    }
+
+    setFeedbackSubmitting(true);
+    try {
+      console.log(feedbackData);
+      await fetch(API_BASE_URL+ '/feedback', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(feedbackData)
+      });
+
+      alert('Thank you for your feedback! We appreciate it.');
+      setFeedbackData({ name: '', email: '', feedback: '' });
+      setShowFeedbackModal(false);
+    } catch (error) {
+      alert('Failed to submit feedback. Please try again.');
+    } finally {
+      setFeedbackSubmitting(false);
+    }
+  };
+
+  const handleFeedbackChange = (field: keyof FeedbackData, value: string) => {
+    setFeedbackData(prev => ({ ...prev, [field]: value }));
+  };
+
+  const handleModalClose = (modalType: 'feedback' | 'privacy') => {
+    if (modalType === 'feedback') {
+      setShowFeedbackModal(false);
+    } else {
+      setShowPrivacyModal(false);
+    }
+  };
+
   return (
     <div className="App">
+      {/* Three-dot menu button */}
+      <div className="options-menu-container">
+        <button 
+          className="options-menu-button"
+          onClick={() => setShowOptionsMenu(!showOptionsMenu)}
+          aria-label="Options menu"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 16 16">
+            <path d="M3 9.5a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3m5 0a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3m5 0a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3"/>
+          </svg>
+        </button>
+        {showOptionsMenu && (
+          <div className="options-menu-dropdown">
+            <button 
+              className="options-menu-item"
+              onClick={() => handleOptionClick('feedback')}
+            >
+              Give Feedback
+            </button>
+            <button 
+              className="options-menu-item"
+              onClick={() => handleOptionClick('privacy')}
+            >
+              Privacy Policy
+            </button>
+          </div>
+        )}
+      </div>
+
       {selectedSeries && (
         <div onClick={() => {setSelectedSeries('');setSeriesInput('');setCurrentGuess('');setResponse(null)}} className="top-series-bar">
           <span className="series-title">
@@ -271,6 +380,90 @@ const GuessPage: React.FC = () => {
           )}
         </button>
       </form>
+
+      {/* Feedback Modal */}
+      {showFeedbackModal && (
+        <div className="modal-overlay" onClick={() => handleModalClose('feedback')}>
+          <div className="modal-content feedback-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>Give Feedback</h2>
+              <button 
+                className="modal-close"
+                onClick={() => handleModalClose('feedback')}
+                aria-label="Close"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="currentColor" viewBox="0 0 16 16">
+                  <path d="M2.146 2.854a.5.5 0 1 1 .708-.708L8 7.293l5.146-5.147a.5.5 0 0 1 .708.708L8.707 8l5.147 5.146a.5.5 0 0 1-.708.708L8 8.707l-5.146 5.147a.5.5 0 0 1-.708-.708L7.293 8z"/>
+                </svg>
+              </button>
+            </div>
+            <form onSubmit={handleFeedbackSubmit} className="feedback-form">
+              <div className="form-group">
+                <label htmlFor="feedback-name">Name (optional)</label>
+                <input
+                  id="feedback-name"
+                  type="text"
+                  value={feedbackData.name}
+                  onChange={(e) => handleFeedbackChange('name', e.target.value)}
+                  className="form-input"
+                  placeholder="Your name"
+                />
+              </div>
+              <div className="form-group">
+                <label htmlFor="feedback-email">Email (optional)</label>
+                <input
+                  id="feedback-email"
+                  type="email"
+                  value={feedbackData.email}
+                  onChange={(e) => handleFeedbackChange('email', e.target.value)}
+                  className="form-input"
+                  placeholder="your.email@example.com"
+                />
+              </div>
+              <div className="form-group">
+                <label htmlFor="feedback-message">Feedback *</label>
+                <textarea
+                  id="feedback-message"
+                  value={feedbackData.feedback}
+                  onChange={(e) => handleFeedbackChange('feedback', e.target.value)}
+                  className="form-textarea"
+                  placeholder="Share your thoughts, suggestions, or report issues..."
+                  rows={6}
+                  required
+                />
+              </div>
+              <button 
+                type="submit" 
+                className="submit-button"
+                disabled={feedbackSubmitting || !feedbackData.feedback.trim()}
+              >
+                {feedbackSubmitting ? 'Submitting...' : 'Submit Feedback'}
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Privacy Policy Modal */}
+      {showPrivacyModal && (
+        <div className="modal-overlay" onClick={() => handleModalClose('privacy')}>
+          <div className="modal-content privacy-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>Privacy Policy</h2>
+              <button 
+                className="modal-close"
+                onClick={() => handleModalClose('privacy')}
+                aria-label="Close"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="currentColor" viewBox="0 0 16 16">
+                  <path d="M2.146 2.854a.5.5 0 1 1 .708-.708L8 7.293l5.146-5.147a.5.5 0 0 1 .708.708L8.707 8l5.147 5.146a.5.5 0 0 1-.708.708L8 8.707l-5.146 5.147a.5.5 0 0 1-.708-.708L7.293 8z"/>
+                </svg>
+              </button>
+            </div>
+            <PrivacyPolicyContent />
+          </div>
+        </div>
+      )}
     </div>
   );
 };

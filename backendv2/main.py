@@ -1,4 +1,6 @@
 import os
+import json
+import datetime
 from langchain_openai import ChatOpenAI
 from langchain_core.tools import tool
 from dotenv import load_dotenv
@@ -197,7 +199,54 @@ class GuessRequest(BaseModel):
     tv_show_name: str
     guess: str
 
-@app.post("/evaluate-guess")
+class FeedbackRequest(BaseModel):
+    name: str = ""
+    email: str = ""
+    feedback: str
+
+@app.post("/api/feedback")
+async def submit_feedback(request: FeedbackRequest):
+    """
+    Endpoint to receive and store user feedback.
+    
+    Args:
+        request (FeedbackRequest): The feedback data containing name, email, and feedback message.
+    
+    Returns:
+        dict: Success message
+    """
+    # Create feedback entry with timestamp
+    feedback_entry = {
+        "timestamp": datetime.datetime.now().isoformat(),
+        "name": request.name,
+        "email": request.email,
+        "feedback": request.feedback
+    }
+    
+    # Save to file (append to existing feedback)
+    feedback_file = "feedback.json"
+    try:
+        # Read existing feedback
+        if os.path.exists(feedback_file):
+            with open(feedback_file, 'r', encoding='utf-8') as f:
+                feedback_data = json.load(f)
+        else:
+            feedback_data = []
+        
+        # Add new feedback
+        feedback_data.append(feedback_entry)
+        
+        # Write back to file
+        with open(feedback_file, 'w', encoding='utf-8') as f:
+            json.dump(feedback_data, f, indent=2, ensure_ascii=False)
+            
+    except Exception as e:
+        print(f"Error saving feedback to file: {e}")
+        # Continue anyway - don't fail the request if file saving fails
+    
+    return {"message": "Feedback received successfully", "status": "success"}
+
+@app.post("/api/evaluate-guess")
 async def evaluate_guess(request: GuessRequest) -> PlotGuessEvaluation:
     """
     Endpoint to evaluate a guess about a TV show plot.

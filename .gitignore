@@ -6,7 +6,7 @@ venv/
 .vscode/
 *.tar
 .env
-
+*.json
 # Django
 *.sqlite3
 *.db
