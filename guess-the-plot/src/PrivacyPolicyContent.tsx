@@ -44,6 +44,11 @@ const PrivacyPolicyContent: React.FC = () => {
         <h3>7. Children's Privacy</h3>
         <p>Our website is not intended for children under 13. We do not knowingly collect data from children.</p>
       </div>
+      <div className='privacy-section'>
+        <h3>Analytics</h3>
+        <p>We use Google Analytics to understand website usage and improve our service. This may include information about your device, IP address, and interaction with the site.</p>
+        <p>For more information, see <a href="https://policies.google.com/privacy?hl=en-US">Google Analytics Privacy Policy</a></p>
+      </div>
       
       <div className="privacy-section">
         <h3>8. Changes to This Policy</h3>
