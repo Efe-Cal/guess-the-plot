@@ -16,7 +16,7 @@ interface FeedbackData {
   feedback: string;
 }
 
-const API_BASE_URL = (process.env.REACT_APP_API_URL?.replace(/\/$/, '') || "http://localhost:8000") + "/api";
+const API_BASE_URL = (process.env.REACT_APP_API_URL ? process.env.REACT_APP_API_URL.replace(/\/$/, '') + "/api": "http://localhost:8000");
 
 const GuessPage: React.FC = () => {
   const [input, setInput] = useState('');

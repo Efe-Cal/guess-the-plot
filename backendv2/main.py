@@ -204,7 +204,7 @@ class FeedbackRequest(BaseModel):
     email: str = ""
     feedback: str
 
-@app.post("/api/feedback")
+@app.post("/feedback")
 async def submit_feedback(request: FeedbackRequest):
     """
     Endpoint to receive and store user feedback.
@@ -246,7 +246,7 @@ async def submit_feedback(request: FeedbackRequest):
     
     return {"message": "Feedback received successfully", "status": "success"}
 
-@app.post("/api/evaluate-guess")
+@app.post("/evaluate-guess")
 async def evaluate_guess(request: GuessRequest) -> PlotGuessEvaluation:
     """
     Endpoint to evaluate a guess about a TV show plot.
