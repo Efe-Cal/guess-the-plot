@@ -266,6 +266,13 @@ async def evaluate_guess(request: GuessRequest) -> PlotGuessEvaluation:
                 HumanMessage(content=USER_MESSAGE.format(tv_show_name=request.tv_show_name, guess=request.guess))
             ]
     }
+    
+    with open("count.txt","r") as f:
+        count = int(f.read().strip())
+    count += 1
+    with open("count.txt","w") as f:
+        f.write(str(count))
+    
     c = 0
     while c < 3:
         try:
