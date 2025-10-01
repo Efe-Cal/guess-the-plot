@@ -389,7 +389,23 @@ const GuessPage: React.FC = () => {
                             </div>
                           </div>
                           <div className={`${revealedCards.has('is_correct') ? 'block' : 'hidden group-hover:block'} transition-all duration-300`}>
-                            <p className="text-gray-700">{formatCardValue('is_correct', response.is_correct)}</p>
+                            <div className="flex items-center gap-2">
+                              <p className="text-gray-700">{formatCardValue('is_correct', response.is_correct)}</p>
+                              {response.is_correct && (
+                                <div className="relative group/tooltip">
+                                  <div className="w-4 h-4 rounded-full bg-blue-100 flex items-center justify-center cursor-help">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" fill="currentColor" className="text-blue-600" viewBox="0 0 16 16">
+                                      <path d="M8 15A7 7 0 1 1 8 1a7 7 0 0 1 0 14zm0 1A8 8 0 1 0 8 0a8 8 0 0 0 0 16z"/>
+                                      <path d="m8.93 6.588-2.29.287-.082.38.45.083c.294.07.352.176.288.469l-.738 3.468c-.194.897.105 1.319.808 1.319.545 0 1.178-.252 1.465-.598l.088-.416c-.2.176-.492.246-.686.246-.275 0-.375-.193-.304-.533L8.93 6.588zM9 4.5a1 1 0 1 1-2 0 1 1 0 0 1 2 0z"/>
+                                    </svg>
+                                  </div>
+                                  <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 bg-gray-800 text-white text-xs rounded-lg opacity-0 group-hover/tooltip:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-10">
+                                    This doesn’t necessarily mean you’re completely right
+                                    <div className="absolute top-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-gray-800"></div>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
                           </div>
                           <button 
                             className={`mt-auto text-sm font-bold text-green-600 self-start ${revealedCards.has('is_correct') ? 'hidden' : 'group-hover:hidden'}`}
