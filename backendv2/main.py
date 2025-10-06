@@ -204,6 +204,12 @@ class FeedbackRequest(BaseModel):
     email: str = ""
     feedback: str
 
+class RatingRequest(BaseModel):
+    rating: str  # 'positive', 'negative-spoiler', 'negative-incorrect-evaluation', 'negative-inaccurate-time', 'negative-inaccurate-explanation', 'negative-other'
+    tv_show_name: str
+    guess: str
+    evaluation: PlotGuessEvaluation
+
 @app.post("/feedback")
 async def submit_feedback(request: FeedbackRequest):
     """
@@ -245,6 +251,48 @@ async def submit_feedback(request: FeedbackRequest):
         # Continue anyway - don't fail the request if file saving fails
     
     return {"message": "Feedback received successfully", "status": "success"}
+
+@app.post("/rating")
+async def submit_rating(request: RatingRequest):
+    """
+    Endpoint to receive and store user ratings for evaluations.
+    
+    Args:
+        request (RatingRequest): The rating data containing rating type, tv show name, and guess.
+    
+    Returns:
+        dict: Success message
+    """
+    # Create rating entry with timestamp
+    rating_entry = {
+        "timestamp": datetime.datetime.now().isoformat(),
+        "rating": request.rating,
+        "tv_show_name": request.tv_show_name,
+        "guess": request.guess
+    }
+    
+    # Save to file (append to existing ratings)
+    rating_file = "ratings.json"
+    try:
+        # Read existing ratings
+        if os.path.exists(rating_file):
+            with open(rating_file, 'r', encoding='utf-8') as f:
+                rating_data = json.load(f)
+        else:
+            rating_data = []
+        
+        # Add new rating
+        rating_data.append(rating_entry)
+        
+        # Write back to file
+        with open(rating_file, 'w', encoding='utf-8') as f:
+            json.dump(rating_data, f, indent=2, ensure_ascii=False)
+            
+    except Exception as e:
+        print(f"Error saving rating to file: {e}")
+        # Continue anyway - don't fail the request if file saving fails
+    
+    return {"message": "Rating received successfully", "status": "success"}
 
 @app.post("/evaluate-guess")
 async def evaluate_guess(request: GuessRequest) -> PlotGuessEvaluation:
@@ -292,3 +340,4 @@ async def evaluate_guess(request: GuessRequest) -> PlotGuessEvaluation:
         )
         
     return response["final_response"].model_dump()
+
