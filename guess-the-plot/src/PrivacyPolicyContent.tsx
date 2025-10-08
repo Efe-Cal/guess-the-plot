@@ -27,6 +27,7 @@ const PrivacyPolicyContent: React.FC = () => {
         <h3>4. Data Retention</h3>
         <p>We do not store user input. Data is only processed temporarily to generate responses or query the OMDB API.</p>
         <p>Feedback submitted by users is stored temporarily until it is reviewed by the developer and then deleted.</p>
+        <p>Ratings submitted by users are stored temporarily along with the user input and AI evaluation.</p>
       </div>
       
       <div className="privacy-section">
