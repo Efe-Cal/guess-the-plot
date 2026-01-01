@@ -33,41 +33,57 @@ app.add_middleware(
 
 load_dotenv()
 
-SYSTEM_MESSAGE = (
-    "You are an expert in TV shows and their plots. Your task is to evaluate a guess "
-    "about a TV show plot and provide feedback on its accuracy, events' time in the show, "
-    "your confidence level, and an explanation. Leave the time empty if the guess is incorrect A guess is correct even if it is not 100% accurate, "
-    "as long as it captures the main events and themes of the plot. If the event in the guess occurs even "
-    "once in the show, it is considered correct, even if it is not the final resolution of the plot.\n"
-    "You are given access to a web search tool to look up information about the TV show and its plot. Use this tool if you NEED more information to evaluate the guess. "
-
-)
-
-USER_MESSAGE = """
-Please evaluate the following guess about a TV show plot.
-TV Show Name: {tv_show_name}
-Guess: {guess}
+SYSTEM_MESSAGE = """
+You are an expert TV show plot analyst with deep knowledge of narrative structures, character arcs, and television history. Your task is to evaluate a proposed plot guess for a TV show by analyzing its accuracy, timing of events, and thematic consistency.
 """
 
-WEB_SEARCHER_INSTRUCTION = (
-    "User has a guess about a TV show plot. Your job is to create exactly 5 search queries that will help you determine whether the guess is correct or not. "
-    "Each query should be a single line, and should be specific to the TV show and the guess. "
-    """Here is how to write good search queries:
-- Write queries short and direct.
-- Do not use full sentences or questions.
-- Use only the most important words.
-- Start with the main topic, then add context.
-- Keep queries three to six words long.
-- Put specific words close together in a clear phrase.
-- Avoid extra words like "how" or "what is" or "Did ... ?".
-- DO NOT use bullet points or numbered lists\n"""
-    "Your answer should be a list of 5 search queries, each on a new line. "
-)
-WEB_SEARCHER_MESSAGE = (
-    "The TV show is: {tv_show_name}. "
-    "The guess is: {guess}. "
-    "Create 5 specific search queries to find information about the TV show and the guess."
-)
+USER_MESSAGE = """
+### Given the TV show name and a guess about its plot, evaluate the guess based on the following criteria:
+
+1. **Evaluate Accuracy**  
+   - Identify correct and incorrect plot elements. **Partial correctness** is acceptable if the guess captures major events or themes.  
+   - **Wrong elements must be flagged** even if they appear once in the series.  
+
+2. **Timestamp Events**  
+   - Specify the **season/episode** when each event occurs (e.g., *Season 3, Episode 2*).  
+   - Leave blank if an event is entirely inaccurate.  
+
+3. **Confidence Level**  
+   - Assign a percentage (0%–100%) based on the guess’s alignment with the actual plot.  
+   - **Justify** the confidence score with specific examples.  
+
+4. **Explain Thoroughly**  
+   - Compare the guess to the actual show’s **core themes**, **twists**, and **character development**.  
+   - If uncertain, **explicitly cite your uncertainty** and note where additional research is needed.  
+
+5. **Use the Web Search Tool**  
+   - Conduct multiple searches (via `web_search`) if needed to verify minor details, character roles, or lesser-known plot points.  
+   - **Prioritize canonical sources** (e.g., showrunners, official synopses) for accuracy.  
+
+Ensure responses are **structured, concise**, and **actionable**. Avoid jargon or tangential details.
+
+###
+
+**Example Input Guess**:  
+*"In 'The Mandalorian,' Din Djarin recovers a mysterious dragon from a fiery planet to defeat the Sith."*  
+
+**Example Output**:  
+**Evaluation Summary**  
+- Accuracy: 60%  
+- Timestamped Events:  
+  ✓ "Mysterious dragon" -> Season 1, Episode 1 (Grogu introduced on a dark, fire-ravaged planet, theorized as a dragon in fan culture).  
+  ✗ "Defeat the Sith" -> Not original plot (no Sith in S1; introduced in later seasons).  
+- Confidence: 60%  
+- Explanation: The guess accurately identifies Grogu’s introduction but misattributes the antagonist. The "Sith" conflict occurs in Season 2 (Empire), not the initial series. Themes of protectorship align, but the guess lacks nuance on Mandalorian mythology.  
+
+###
+
+**Now evaluate the following guess:**
+```
+TV Show Name: {tv_show_name}
+Guess: {guess}
+```
+"""
 
 
 class PlotGuessEvaluation(BaseModel):
@@ -92,107 +108,87 @@ def web_search(query: str) -> str:
     result_string = "\n".join([f"- {result['title']}: {result['body']}\n" for result in results])
     return result_string if result_string else "No results found."
 
-tools = [tool(web_search, description="Useful for when you need to look up information about a TV show or its plot.")]
+web_search_tool = tool(web_search, description="Useful for when you need to look up information about a TV show or its plot. Use this to verify plot details, character arcs, or events in the show.")
+tools = [web_search_tool]
 
-# LLM that directly returns structured output
+# LLM setup
 if os.getenv("USE_OPENAI", "false").lower() == "true":
-    model = ChatOpenAI(model="gpt-4.1-mini")
+    model = ChatOpenAI(model="gpt-5.1-mini")
 else:
     model = init_chat_model("gemini-2.5-flash", model_provider="google_genai")
 
-model_with_response_tool = model.bind_tools(tools, tool_choice="auto")
-model_with_structured_output = model_with_response_tool.with_structured_output(PlotGuessEvaluation)
-
-def web_searcher(state: AgentState):
-    response = model.invoke(
-        [
-            SystemMessage(content=WEB_SEARCHER_INSTRUCTION),
-            HumanMessage(content=WEB_SEARCHER_MESSAGE.format(tv_show_name=state["tv_show_name"],guess=state["guess"]))
-        ]
-    )
-    # We return a list, because this will get added to the existing list
-    queries = [line.strip() for line in response.content.split("\n") if line.strip()]
-    for query in queries:
-        search_results = web_search(query)
-        state["search_results"] = state.get("search_results", "") + f"\nSearch results for '{query}':\n{search_results}\n"
-    return {"messages": [HumanMessage(content="Here is some additional information, web search results, on the TV series that may be related to the guess:\n"+state["search_results"])]}
+# Model with tools for the agent loop
+model_with_tools = model.bind_tools(tools)
+# Model for final structured output (no tools)
+model_structured = model.with_structured_output(PlotGuessEvaluation)
 
 def call_model(state: AgentState):
-    response = model_with_structured_output.invoke(state["messages"])
+    """Call the model and let it decide whether to use tools."""
+    response = model_with_tools.invoke(state["messages"])
+    return {"messages": [response]}
 
+def execute_tools(state: AgentState):
+    """Execute any tool calls from the last message."""
+    last_message = state["messages"][-1]
+    tool_results = []
+    
+    for tool_call in last_message.tool_calls:
+        if tool_call["name"] == "web_search":
+            result = web_search(tool_call["args"]["query"])
+            tool_results.append({
+                "type": "tool",
+                "content": result,
+                "tool_call_id": tool_call["id"],
+            })
+    
+    return {"messages": tool_results}
+
+def should_continue(state: AgentState):
+    """Determine if we should continue with tools or get final response."""
+    last_message = state["messages"][-1]
+    # If the last message has tool calls, execute them
+    if hasattr(last_message, "tool_calls") and last_message.tool_calls:
+        return "tools"
+    return "final"
+
+def get_final_response(state: AgentState):
+    """Get the final structured response from the model."""
+    # Add instruction to provide final evaluation
+    final_prompt = state["messages"] + [
+        HumanMessage(content="Based on the information gathered, please provide your final evaluation of the guess.")
+    ]
+    response = model_structured.invoke(final_prompt)
     return {"final_response": response}
-
-
-# # Define the function that responds to the user
-# def respond(state: AgentState):
-#     # Construct the final answer from the arguments of the last tool call
-#     response_tool_call = state["messages"][-1].tool_calls[0]
-#     response = PlotGuessEvaluation(**response_tool_call["args"])
-#     # Since we're using tool calling to return structured output,
-#     # we need to add  a tool message corresponding to the WeatherResponse tool call,
-#     # This is due to LLM providers' requirement that AI messages with tool calls
-#     # need to be followed by a tool message for each tool call
-#     tool_message = {
-#         "type": "tool",
-#         "content": "Here is your structured response",
-#         "tool_call_id": response_tool_call["id"],
-#     }
-#     # We return the final answer
-#     return {"final_response": response, "messages": [tool_message]}
-
-
-# # Define the function that determines whether to continue or not
-# def should_continue(state: AgentState):
-#     last_message = state["messages"][-1]
-#     # If there is only one tool call and it is the response tool call we respond to the user
-#     if (
-#         len(last_message.tool_calls) == 1
-#         and last_message.tool_calls[0]["name"] == "PlotGuessEvaluation"
-#     ):
-#         return "respond"
-#     # Otherwise we will use the tool node again
-#     else:
-#         return "continue"
 
 
 # Define a new graph
 workflow = StateGraph(AgentState)
 
-# Define the two nodes we will cycle between
+# Define the nodes
 workflow.add_node("agent", call_model)
-workflow.add_node("web_searcher", web_searcher)
+workflow.add_node("tools", execute_tools)
+workflow.add_node("final", get_final_response)
 
-# Set the entrypoint as `agent`
-# This means that this node is the first one called
-workflow.set_entry_point("web_searcher")
+# Set the entrypoint
+workflow.set_entry_point("agent")
 
-workflow.add_edge("web_searcher", "agent")
+# Add conditional edge from agent
+workflow.add_conditional_edges(
+    "agent",
+    should_continue,
+    {
+        "tools": "tools",
+        "final": "final",
+    },
+)
 
-workflow.add_edge("agent", END)
-# # We now add a conditional edge
-# workflow.add_conditional_edges(
-#     "agent",
-#     should_continue,
-#     {
-#         "continue": "tools",
-#         "respond": "respond",
-#     },
-# )
+# After tools, go back to agent
+workflow.add_edge("tools", "agent")
 
-# workflow.add_edge("tools", "agent")
-# workflow.add_edge("respond", END)
+# Final node ends the graph
+workflow.add_edge("final", END)
+
 graph = workflow.compile()
-
-
-# response = graph.invoke(input={
-#     "tv_show_name":"House MD",
-#     "guess":"House and cuddy will get married at the end of the series",
-#     "messages": [
-#             SystemMessage(content=SYSTEM_MESSAGE),
-#             HumanMessage(content=USER_MESSAGE.format(tv_show_name="House MD", guess="House and cuddy will get married at the end of the series"))
-#         ]
-# }
-# )
 
 
 class GuessRequest(BaseModel):
