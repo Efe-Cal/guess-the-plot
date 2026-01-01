@@ -1,6 +1,8 @@
 import os
 import json
 import datetime
+import re
+import unicodedata
 from langchain_openai import ChatOpenAI
 from langchain_core.tools import tool
 from dotenv import load_dotenv
@@ -12,8 +14,8 @@ from langgraph.graph import MessagesState
 from langgraph.errors import GraphRecursionError 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-import ddgs
 from langchain.chat_models import init_chat_model
+import requests
 
 app = FastAPI()
 
@@ -52,13 +54,14 @@ USER_MESSAGE = """
    - Assign a percentage (0%–100%) based on the guess’s alignment with the actual plot.  
    - **Justify** the confidence score with specific examples.  
 
-4. **Explain Thoroughly**  
+4. **Explain Breifly**  
    - Compare the guess to the actual show’s **core themes**, **twists**, and **character development**.  
-   - If uncertain, **explicitly cite your uncertainty** and note where additional research is needed.  
+   - Keep your explanation **concise** (2-3 sentences).
 
 5. **Use the Web Search Tool**  
    - Conduct multiple searches (via `web_search`) if needed to verify minor details, character roles, or lesser-known plot points.  
    - **Prioritize canonical sources** (e.g., showrunners, official synopses) for accuracy.  
+   - Make a maximum of 5 web searches to gather necessary information.
 
 Ensure responses are **structured, concise**, and **actionable**. Avoid jargon or tangential details.
 
@@ -100,14 +103,43 @@ class AgentState(MessagesState):
     tv_show_name: str
     guess: str
 
+def clean_text_for_llm(text):
+    # Normalize Unicode
+    text = unicodedata.normalize('NFKC', text)
+    
+    # Remove control characters except newlines/tabs
+    text = ''.join(c for c in text if unicodedata.category(c)[0] != 'C' or c in '\n\r\t')
+    
+    # Remove zero-width characters
+    text = re.sub(r'[\u200b-\u200d\ufeff]', '', text)
+    
+    # Normalize whitespace
+    text = re.sub(r'\s+', ' ', text)
+    
+    return text.strip()
 
 def web_search(query: str) -> str:
-    """Perform a web search using DuckDuckGo."""
-    print(f"Performing web search for: {query}")
-    results = ddgs.DDGS().text(query, max_results=3, safesearch='off')
-    result_string = "\n".join([f"- {result['title']}: {result['body']}\n" for result in results])
-    return result_string if result_string else "No results found."
+    print(f"Performing web search for query: {query}")
+    response = requests.get(
+        'https://search.hackclub.com/res/v1/web/search',
+        params={
+            'q': query,
+            'count': 3,
+            'safesearch': 'off',},
+        headers={'Authorization': f'Bearer {os.getenv("HACKCLUB_SEARCH_API_KEY", "")}'},
+    )
+    response.raise_for_status()
+    data = response.json()
+    
+    # Extract titles and snippets
+    data = [(item["title"], "\n".join(item["extra_snippets"]) if "extra_snippets" in item else item["description"]) for item in data["web"]["results"]]
 
+    # Clean text for LLM compatibility
+    data = [(clean_text_for_llm(title), clean_text_for_llm(snippets)) for title, snippets in data]
+
+    data_str = "\n".join([f"- {title}\n{snippets}\n----------" for title, snippets in data])
+    
+    return data_str
 web_search_tool = tool(web_search, description="Useful for when you need to look up information about a TV show or its plot. Use this to verify plot details, character arcs, or events in the show.")
 tools = [web_search_tool]
 
