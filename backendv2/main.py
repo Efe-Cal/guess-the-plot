@@ -113,7 +113,7 @@ tools = [web_search_tool]
 
 # LLM setup
 if os.getenv("USE_OPENAI", "false").lower() == "true":
-    model = ChatOpenAI(model="gpt-5.1-mini")
+    model = ChatOpenAI(model="gpt-5-mini")
 else:
     model = init_chat_model("gemini-2.5-flash", model_provider="google_genai")
 
