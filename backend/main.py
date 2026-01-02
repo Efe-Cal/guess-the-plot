@@ -23,11 +23,13 @@ import requests
 
 app = FastAPI()
 
+load_dotenv()
+
 origins = [
     "http://localhost:3000",
     "https://guesstheplot.app",
-    "https://efecal.hackclub.app"
-    "https://www.guesstheplot.app"
+    "https://efecal.hackclub.app",
+    "https://www.guesstheplot.app",
 ]+ (os.getenv("CORS_ORIGINS", "").split(",") if os.getenv("CORS_ORIGINS") else [])
 
 app.add_middleware(
@@ -37,8 +39,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-load_dotenv()
 
 logging.basicConfig(level=os.getenv("LOG_LEVEL", "INFO").upper())
 logger = logging.getLogger("guess-the-plot-backend")
