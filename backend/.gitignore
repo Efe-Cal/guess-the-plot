@@ -1,4 +1,3 @@
-*.txt
 feedback.json
 ratings.json
 __pycache__/
