@@ -27,7 +27,8 @@ origins = [
     "http://localhost:3000",
     "https://guesstheplot.app",
     "https://efecal.hackclub.app"
-]
+    "https://www.guesstheplot.app"
+]+ (os.getenv("CORS_ORIGINS", "").split(",") if os.getenv("CORS_ORIGINS") else [])
 
 app.add_middleware(
     CORSMiddleware,
