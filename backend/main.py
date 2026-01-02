@@ -3,6 +3,9 @@ import json
 import datetime
 import re
 import unicodedata
+import logging
+from collections import deque
+from functools import lru_cache
 from langchain_openai import ChatOpenAI
 from langchain_core.tools import tool
 from dotenv import load_dotenv
@@ -13,6 +16,7 @@ from langchain_core.messages import SystemMessage, HumanMessage
 from langgraph.graph import MessagesState
 from langgraph.errors import GraphRecursionError 
 from fastapi import FastAPI
+from fastapi import HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from langchain.chat_models import init_chat_model
 import requests
@@ -34,6 +38,14 @@ app.add_middleware(
 )
 
 load_dotenv()
+
+logging.basicConfig(level=os.getenv("LOG_LEVEL", "INFO").upper())
+logger = logging.getLogger("guess-the-plot-backend")
+
+# Stateless (in-memory) telemetry. Railway containers are ephemeral; do not rely on disk.
+REQUEST_COUNT = 0
+RECENT_FEEDBACK = deque(maxlen=200)
+RECENT_RATINGS = deque(maxlen=500)
 
 SYSTEM_MESSAGE = """
 You are an expert TV show plot analyst with deep knowledge of narrative structures, character arcs, and television history. Your task is to evaluate a proposed plot guess for a TV show by analyzing its accuracy, timing of events, and thematic consistency.
@@ -143,19 +155,28 @@ def web_search(query: str) -> str:
 web_search_tool = tool(web_search, description="Useful for when you need to look up information about a TV show or its plot. Use this to verify plot details, character arcs, or events in the show.")
 tools = [web_search_tool]
 
-# LLM setup
-if os.getenv("USE_OPENAI", "false").lower() == "true":
-    model = ChatOpenAI(model="gpt-5-mini")
-else:
-    model = init_chat_model("gemini-2.5-flash", model_provider="google_genai")
 
-# Model with tools for the agent loop
-model_with_tools = model.bind_tools(tools)
-# Model for final structured output (no tools)
-model_structured = model.with_structured_output(PlotGuessEvaluation)
+def _build_models():
+    """Create model instances based on env vars.
+
+    NOTE: This is intentionally lazy to avoid crashing the web process at import time
+    when API keys are missing or misconfigured.
+    """
+    use_openai = os.getenv("USE_OPENAI", "false").lower() == "true"
+    if use_openai:
+        openai_model = os.getenv("OPENAI_MODEL", "gpt-5-mini")
+        base_model = ChatOpenAI(model=openai_model)
+    else:
+        gemini_model = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
+        base_model = init_chat_model(gemini_model, model_provider="google_genai")
+
+    model_with_tools = base_model.bind_tools(tools)
+    model_structured = base_model.with_structured_output(PlotGuessEvaluation)
+    return model_with_tools, model_structured
 
 def call_model(state: AgentState):
     """Call the model and let it decide whether to use tools."""
+    model_with_tools, _ = get_models()
     response = model_with_tools.invoke(state["messages"])
     return {"messages": [response]}
 
@@ -189,6 +210,7 @@ def get_final_response(state: AgentState):
     final_prompt = state["messages"] + [
         HumanMessage(content="Based on the information gathered, please provide your final evaluation of the guess.")
     ]
+    _, model_structured = get_models()
     response = model_structured.invoke(final_prompt)
     return {"final_response": response}
 
@@ -221,6 +243,18 @@ workflow.add_edge("tools", "agent")
 workflow.add_edge("final", END)
 
 graph = workflow.compile()
+
+
+@lru_cache(maxsize=1)
+def get_models():
+    try:
+        return _build_models()
+    except Exception as e:
+        # Don't crash startup; surface as a request-time error instead.
+        logger.exception("Failed to initialize LLM models")
+        raise RuntimeError(
+            "LLM models failed to initialize. Check env vars like USE_OPENAI, OPENAI_API_KEY/GOOGLE_API_KEY, and OPENAI_MODEL/GEMINI_MODEL."
+        ) from e
 
 
 class GuessRequest(BaseModel):
@@ -257,26 +291,9 @@ async def submit_feedback(request: FeedbackRequest):
         "feedback": request.feedback
     }
     
-    # Save to file (append to existing feedback)
-    feedback_file = "feedback.json"
-    try:
-        # Read existing feedback
-        if os.path.exists(feedback_file):
-            with open(feedback_file, 'r', encoding='utf-8') as f:
-                feedback_data = json.load(f)
-        else:
-            feedback_data = []
-        
-        # Add new feedback
-        feedback_data.append(feedback_entry)
-        
-        # Write back to file
-        with open(feedback_file, 'w', encoding='utf-8') as f:
-            json.dump(feedback_data, f, indent=2, ensure_ascii=False)
-            
-    except Exception as e:
-        print(f"Error saving feedback to file: {e}")
-        # Continue anyway - don't fail the request if file saving fails
+    # Stateless logging only (Railway containers are ephemeral)
+    RECENT_FEEDBACK.append(feedback_entry)
+    logger.info("Feedback received", extra={"feedback": feedback_entry})
     
     return {"message": "Feedback received successfully", "status": "success"}
 
@@ -299,26 +316,9 @@ async def submit_rating(request: RatingRequest):
         "guess": request.guess
     }
     
-    # Save to file (append to existing ratings)
-    rating_file = "ratings.json"
-    try:
-        # Read existing ratings
-        if os.path.exists(rating_file):
-            with open(rating_file, 'r', encoding='utf-8') as f:
-                rating_data = json.load(f)
-        else:
-            rating_data = []
-        
-        # Add new rating
-        rating_data.append(rating_entry)
-        
-        # Write back to file
-        with open(rating_file, 'w', encoding='utf-8') as f:
-            json.dump(rating_data, f, indent=2, ensure_ascii=False)
-            
-    except Exception as e:
-        print(f"Error saving rating to file: {e}")
-        # Continue anyway - don't fail the request if file saving fails
+    # Stateless logging only (Railway containers are ephemeral)
+    RECENT_RATINGS.append(rating_entry)
+    logger.info("Rating received", extra={"rating": rating_entry})
     
     return {"message": "Rating received successfully", "status": "success"}
 
@@ -334,6 +334,9 @@ async def evaluate_guess(request: GuessRequest) -> PlotGuessEvaluation:
     Returns:
         PlotGuessEvaluation: The evaluation of the guess.
     """
+    global REQUEST_COUNT
+    REQUEST_COUNT += 1
+
     input_data = {
         "tv_show_name":request.tv_show_name,
         "guess":request.guess,
@@ -342,12 +345,11 @@ async def evaluate_guess(request: GuessRequest) -> PlotGuessEvaluation:
                 HumanMessage(content=USER_MESSAGE.format(tv_show_name=request.tv_show_name, guess=request.guess))
             ]
     }
-    
-    with open("count.txt","r") as f:
-        count = int(f.read().strip())
-    count += 1
-    with open("count.txt","w") as f:
-        f.write(str(count))
+
+    try:
+        _ = get_models()
+    except RuntimeError as e:
+        raise HTTPException(status_code=503, detail=str(e))
     
     c = 0
     while c < 3:
@@ -368,4 +370,12 @@ async def evaluate_guess(request: GuessRequest) -> PlotGuessEvaluation:
         )
         
     return response["final_response"].model_dump()
+
+
+@app.get("/health")
+async def health():
+    return {
+        "status": "ok",
+        "requestCount": REQUEST_COUNT,
+    }
 

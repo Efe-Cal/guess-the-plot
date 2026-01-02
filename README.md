@@ -48,7 +48,7 @@ guess-the-plot/
 │   └── App.css            # Styling
 ├── public/                # Static assets
 ├── backend/               # Django backend (deprecated)
-└── backendv2/             # FastAPI backend (v2)
+└── backend/             # FastAPI backend (v2)
     └── main.py           # Main FastAPI application
 ```
 
@@ -90,7 +90,7 @@ The app will be available at `http://localhost:3000`
 
 1. Navigate to the backend directory:
 ```bash
-cd backendv2
+cd backend
 ```
 
 2. Install Python dependencies:

@@ -1,1 +1,6 @@
 *.txt
+feedback.json
+ratings.json
+__pycache__/
+.pytest_cache/
+.env
